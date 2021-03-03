@@ -6,6 +6,7 @@ class TextureDrawer {
     private readonly Material _pixelMaterial;
     private readonly Material _finishMaterial;
     private Material _drawMaterial;
+    private static readonly int Zoom = Shader.PropertyToID("_Zoom");
 
     public TextureDrawer() {
         var gameObject = GameObject.CreatePrimitive(PrimitiveType.Quad);
@@ -17,11 +18,12 @@ class TextureDrawer {
         _drawMaterial = _finishMaterial;
     }
 
-    public void Draw(Texture texture, int width, int height) {
+    public void Draw(Texture texture, int width, int height, float zoom) {
         // ReSharper disable once Unity.PreferAddressByIdToGraphicsParams
         _drawMaterial.SetTexture("_BaseMap", texture);
         // ReSharper disable once Unity.PreferAddressByIdToGraphicsParams
         _drawMaterial.SetTexture("_MainTex", texture);
+        _drawMaterial.SetFloat(Zoom, zoom);
         var mat = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(width, height, 1));
         Graphics.DrawMesh(_quadMesh, mat, _drawMaterial,0);
     }

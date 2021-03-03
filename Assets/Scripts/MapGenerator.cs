@@ -7,6 +7,7 @@ public class MapGenerator : MonoBehaviour {
     private const int Width = 800;
     private const int Height = 800;
     private readonly float[,] _heightMap = new float[800,800];
+    private readonly float[,] _waterMap = new float[800,800];
     private Texture2D _outTexture;
     private TextureDrawer _textureDrawer;
 
@@ -15,6 +16,17 @@ public class MapGenerator : MonoBehaviour {
         _outTexture = new Texture2D(Width,Height);
         _textureDrawer = new TextureDrawer();
         GenerateHeightMap();
+
+        for (int i = 0; i < Width; i++) {
+            _waterMap[i, Height / 2] = 1;
+        }
+        
+        for (var x = 0; x < 800; x++) {
+            for (var y = 0; y < 800; y++) {
+                _outTexture.SetPixel(x,y, new Color(_heightMap[x,y],0,_waterMap[x,y]));
+            }   
+        }
+        _outTexture.Apply();
     }
 
     private void GenerateHeightMap() {
@@ -23,15 +35,19 @@ public class MapGenerator : MonoBehaviour {
             for (var y = 0; y < 800; y++) {
                 var value = Mathf.PerlinNoise(x*0.01f + offset, y*0.01f);
                 _heightMap[x, y] = value;
-                _outTexture.SetPixel(x,y, new Color(value,value,value));
             }   
         }
-        _outTexture.Apply();
     }
 
     private void Update() {
-        _textureDrawer.Draw(_outTexture, Width, Height);
+        _textureDrawer.Draw(_outTexture, Width, Height, zoom);
+
+        if (Input.mouseScrollDelta.magnitude > 0.1f) {
+            zoom = Mathf.Clamp(zoom + Input.mouseScrollDelta.y * zoom * 0.2f, 0.8f, 100.0f);
+        }
     }
+
+    private float zoom = 1.0f;
 
     private void OnGUI() {
         const int height = 40;
