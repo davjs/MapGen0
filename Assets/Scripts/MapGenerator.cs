@@ -1,29 +1,60 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Assertions;
+using Color = UnityEngine.Color;
 
 
 public class MapGenerator : MonoBehaviour {
+
+    struct WaterCell {
+        public int X;
+        public int Y;
+        public int Amount;
+    }
+    
     private const int Width = 800;
     private const int Height = 800;
     private readonly float[,] _heightMap = new float[800,800];
-    private readonly float[,] _waterMap = new float[800,800];
+    private readonly WaterCell[,] _waterMap = new WaterCell[800,800];
     private Texture2D _outTexture;
     private TextureDrawer _textureDrawer;
 
+
+    float packWaterCell(int direction, int velocity) {
+        Assert.IsTrue(direction <= 3);
+        Assert.IsTrue(velocity <= 1000);
+        return direction * 1000 + velocity;
+    }
+
+    Vector2Int randomAxialVector() {
+        switch (Mathf.RoundToInt(Random.Range(0, 4))) {
+            case 0: return Vector2Int.right;
+            case 1: return Vector2Int.up;
+            case 2: return Vector2Int.left;
+            case 3: return Vector2Int.down;
+            default: return Vector2Int.right;
+        }
+    }
+
     private void Start()
     {
-        _outTexture = new Texture2D(Width,Height);
+        _outTexture = new Texture2D(Width,Height, TextureFormat.RGBAFloat, false);
         _textureDrawer = new TextureDrawer();
         GenerateHeightMap();
 
         for (int i = 0; i < Width; i++) {
-            _waterMap[i, Height / 2] = 1;
+            var v = randomAxialVector();
+            _waterMap[i, Height / 2] = new WaterCell {
+                Amount = 1,
+                X = v.x,
+                Y = v.y
+            };
         }
         
         for (var x = 0; x < 800; x++) {
             for (var y = 0; y < 800; y++) {
-                _outTexture.SetPixel(x,y, new Color(_heightMap[x,y],0,_waterMap[x,y]));
+                _outTexture.SetPixel(x,y, new Color(_heightMap[x,y],_waterMap[x,y].X, _waterMap[x,y].Y,_waterMap[x,y].Amount));
             }   
         }
         _outTexture.Apply();
@@ -47,7 +78,7 @@ public class MapGenerator : MonoBehaviour {
         }
     }
 
-    private float zoom = 1.0f;
+    private float zoom = 85.0f;
 
     private void OnGUI() {
         const int height = 40;
