@@ -1,5 +1,8 @@
+using System;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Windows;
+using Object = UnityEngine.Object;
 
 class TextureDrawer {
     private readonly Mesh _quadMesh;
@@ -37,8 +40,18 @@ class TextureDrawer {
         _drawMaterial = _pixelMaterial;
     }
 
+    // Can only be called once per texture
     // ReSharper disable once MemberCanBeMadeStatic.Global
-    public void Save(Texture texture) {
-        AssetDatabase.CreateAsset(texture, "Assets/heightmap");
+    public void CreateAssetAndSave(Texture2D texture) {
+        const string path = "Assets/resources/heightmap";
+        AssetDatabase.CreateAsset(texture, path);
+        File.WriteAllBytes("Assets/datafile.png", texture.EncodeToPNG());
+    }
+
+    // Can be called multiple times
+    public void UpdateSave(Texture2D texture, float zoom) {
+        File.WriteAllBytes("Assets/datafile.png", texture.EncodeToPNG());
+        EditorApplication.isPlaying = false;
+        File.WriteAllBytes("zoomLevel", BitConverter.GetBytes(zoom));
     }
 }

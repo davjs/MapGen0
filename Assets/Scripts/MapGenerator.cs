@@ -1,22 +1,24 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
 using UnityEngine.Assertions;
 using Color = UnityEngine.Color;
+using Random = UnityEngine.Random;
 
 
 public class MapGenerator : MonoBehaviour {
-
     struct WaterCell {
         public int X;
         public int Y;
         public int Amount;
     }
-    
+
     private const int Width = 800;
     private const int Height = 800;
-    private readonly float[,] _heightMap = new float[800,800];
-    private readonly WaterCell[,] _waterMap = new WaterCell[800,800];
+    private readonly float[,] _heightMap = new float[800, 800];
+    private readonly WaterCell[,] _waterMap = new WaterCell[800, 800];
     private Texture2D _outTexture;
     private TextureDrawer _textureDrawer;
 
@@ -37,10 +39,32 @@ public class MapGenerator : MonoBehaviour {
         }
     }
 
-    private void Start()
-    {
-        _outTexture = new Texture2D(Width,Height, TextureFormat.RGBAFloat, false);
+    private void Start() {
+        _outTexture = new Texture2D(Width, Height, TextureFormat.RGBAFloat, false);
         _textureDrawer = new TextureDrawer();
+
+        LoadHeightMapFromFile();
+    }
+
+    private void LoadHeightMapFromFile() {
+        const string path = "Assets/datafile.png";
+        if (File.Exists(path)) {
+            var fileData = File.ReadAllBytes(path);
+            _outTexture.LoadImage(fileData);
+            _textureDrawer.CreateAssetAndSave(_outTexture);
+        }
+        else {
+            ReGenerate();
+            _textureDrawer.CreateAssetAndSave(_outTexture);
+        }
+
+        if (UnityEngine.Windows.File.Exists("zoomLevel")) {
+            zoom = BitConverter.ToSingle(UnityEngine.Windows.File.ReadAllBytes("zoomLevel"),0);
+        }
+    }
+
+
+    private void ReGenerate() {
         GenerateHeightMap();
 
         for (int i = 0; i < Width; i++) {
@@ -51,12 +75,14 @@ public class MapGenerator : MonoBehaviour {
                 Y = v.y
             };
         }
-        
+
         for (var x = 0; x < 800; x++) {
             for (var y = 0; y < 800; y++) {
-                _outTexture.SetPixel(x,y, new Color(_heightMap[x,y],_waterMap[x,y].X, _waterMap[x,y].Y,_waterMap[x,y].Amount));
-            }   
+                _outTexture.SetPixel(x, y,
+                    new Color(_heightMap[x, y], _waterMap[x, y].X, _waterMap[x, y].Y, _waterMap[x, y].Amount));
+            }
         }
+
         _outTexture.Apply();
     }
 
@@ -64,9 +90,9 @@ public class MapGenerator : MonoBehaviour {
         var offset = Random.Range(0, 100000);
         for (var x = 0; x < 800; x++) {
             for (var y = 0; y < 800; y++) {
-                var value = Mathf.PerlinNoise(x*0.01f + offset, y*0.01f);
+                var value = Mathf.PerlinNoise(x * 0.01f + offset, y * 0.01f);
                 _heightMap[x, y] = value;
-            }   
+            }
         }
     }
 
@@ -83,15 +109,17 @@ public class MapGenerator : MonoBehaviour {
     private void OnGUI() {
         const int height = 40;
         if (GUI.Button(new Rect(10, 70 + height * 0, 100, height), "Regen")) {
-            GenerateHeightMap();
+            ReGenerate();
         }
+
         if (GUI.Button(new Rect(10, 70 + height * 1, 100, height), "Save")) {
-            _textureDrawer.Save(_outTexture);
+            _textureDrawer.UpdateSave(_outTexture, zoom);
         }
-        
+
         if (GUI.Button(new Rect(10, 110 + height * 2, 100, height), "Debug")) {
             _textureDrawer.SetDebug();
         }
+
         if (GUI.Button(new Rect(10, 110 + height * 3, 100, height), "Standard")) {
             _textureDrawer.SetStandard();
         }
