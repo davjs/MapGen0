@@ -1,7 +1,9 @@
 using System;
+using Unity.Mathematics;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Windows;
+using Debug = System.Diagnostics.Debug;
 using Object = UnityEngine.Object;
 
 class TextureDrawer {
@@ -27,7 +29,8 @@ class TextureDrawer {
         // ReSharper disable once Unity.PreferAddressByIdToGraphicsParams
         _drawMaterial.SetTexture("_MainTex", texture);
         _drawMaterial.SetFloat(Zoom, zoom);
-        var mat = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(width, height, 1));
+        Debug.Assert(Camera.main != null, "Camera.main != null");
+        var mat = Matrix4x4.TRS(float3.zero + Camera.main.transform.position * new float3(1,1,0), Quaternion.identity, new Vector3(width, height, 1));
         Graphics.DrawMesh(_quadMesh, mat, _drawMaterial,0);
     }
 

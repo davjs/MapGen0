@@ -2,6 +2,8 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
+using Unity.Mathematics;
 using UnityEngine;
 using UnityEngine.Assertions;
 using Color = UnityEngine.Color;
@@ -44,6 +46,7 @@ public class MapGenerator : MonoBehaviour {
         _textureDrawer = new TextureDrawer();
 
         LoadHeightMapFromFile();
+        ReGenerate();
     }
 
     private void LoadHeightMapFromFile() {
@@ -66,15 +69,7 @@ public class MapGenerator : MonoBehaviour {
 
     private void ReGenerate() {
         GenerateHeightMap();
-
-        for (int i = 0; i < Width; i++) {
-            var v = randomAxialVector();
-            _waterMap[i, Height / 2] = new WaterCell {
-                Amount = 1,
-                X = v.x,
-                Y = v.y
-            };
-        }
+        GenerateRivers();
 
         for (var x = 0; x < 800; x++) {
             for (var y = 0; y < 800; y++) {
@@ -84,6 +79,85 @@ public class MapGenerator : MonoBehaviour {
         }
 
         _outTexture.Apply();
+    }
+
+    private void GenerateRivers() {
+        // Find hills/mountains
+        var mointainTops = GetSpreadOutMointainTops();
+        var targetCells = new List<int2>() {
+            new int2(+1, 0),
+            new int2(0, +1),
+            new int2(-1, 0),
+            new int2(0, -1),
+        };
+
+
+        foreach (var mountainTop in mointainTops) {
+            var xx = mountainTop.Item1;
+            var yy = mountainTop.Item2;
+            var lastDir = new int2(0, 1);
+            while (xx < Width -1 && xx > 1 && yy > 1 && yy < Height -1) {
+                var cellWithHeight = targetCells.Select(c => (c, _heightMap[xx + c.x,yy + c.y]));
+                var ordered = cellWithHeight.OrderBy(x => x.Item2).ToList();
+                var lowest = ordered.First();
+                var height = _heightMap[xx,yy];
+                
+                if (lowest.Item2 < height) {
+                    _waterMap[xx,yy ] = new WaterCell {
+                        Amount = 1,
+                        X = lowest.c.x,
+                        Y = lowest.c.y
+                    };
+                    lastDir = lowest.c;
+                    xx = xx + lastDir.x;
+                    yy = yy + lastDir.y;
+                }
+                else {
+                    _waterMap[xx,yy ] = new WaterCell {
+                        Amount = 1,
+                        X = lastDir.x,
+                        Y = lastDir.y
+                    };
+                    break;
+                }
+//                
+                
+                
+            }
+        }
+    }
+
+    private List<Tuple<int, int, float>> GetSpreadOutMointainTops() {
+        var Queue = new List<Tuple<int, int, float>>(3);
+        for (int xx = 0; xx < Height; xx++) {
+            for (int yy = 0; yy < Width; yy++) {
+                var height = _heightMap[xx, yy];
+                if (Queue.Count < 3) {
+                    Queue.Add(Tuple.Create(xx, yy, height));
+                    Queue.Sort((a, b) => a.Item3.CompareTo(b.Item3));
+                }
+                else {
+                    var awayFromAll = Queue.All(x => {
+                        var dist = (new Vector2(x.Item1, x.Item2) - new Vector2(xx, yy)).magnitude;
+                        return dist > 100.0;
+                    });
+
+                    if (awayFromAll && Queue.Any(x => x.Item3 < height)) {
+                        var awayFromAll2 = Queue.All(x => {
+                            var dist = (new Vector2(x.Item1, x.Item2) - new Vector2(xx, yy)).magnitude;
+                            return dist > 100.0;
+                        });
+                        if (awayFromAll2) {
+                            Queue.RemoveAt(0);
+                            Queue.Add(Tuple.Create(xx, yy, height));
+                            Queue.Sort((a, b) => a.Item3.CompareTo(b.Item3));
+                        }
+                    }
+                }
+            }
+        }
+
+        return Queue;
     }
 
     private void GenerateHeightMap() {
