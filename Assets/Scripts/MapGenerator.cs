@@ -10,39 +10,32 @@ using Color = UnityEngine.Color;
 using Random = UnityEngine.Random;
 
 
-public class MapGenerator : MonoBehaviour {
+//TODO: shouldnt need to be monobehaviour
+public class MapGenerator {
+    
     struct WaterCell {
         public int X;
         public int Y;
         public int Amount;
     }
 
-    private const int Width = 800;
-    private const int Height = 800;
-    private readonly float[,] _heightMap = new float[800, 800];
-    private readonly WaterCell[,] _waterMap = new WaterCell[800, 800];
-    private Texture2D _outTexture;
-    private TextureDrawer _textureDrawer;
+    private readonly int _width;
+    private readonly int _height;
+    private readonly float[,] _heightMap;
+    private readonly WaterCell[,] _waterMap;
+    private readonly Texture2D _outTexture;
+    private readonly TextureDrawer _textureDrawer;
 
-
-    float packWaterCell(int direction, int velocity) {
-        Assert.IsTrue(direction <= 3);
-        Assert.IsTrue(velocity <= 1000);
-        return direction * 1000 + velocity;
+    public Texture2D GetTexture() {
+        return _outTexture;
     }
 
-    Vector2Int randomAxialVector() {
-        switch (Mathf.RoundToInt(Random.Range(0, 4))) {
-            case 0: return Vector2Int.right;
-            case 1: return Vector2Int.up;
-            case 2: return Vector2Int.left;
-            case 3: return Vector2Int.down;
-            default: return Vector2Int.right;
-        }
-    }
-
-    private void Start() {
-        _outTexture = new Texture2D(Width, Height, TextureFormat.RGBAFloat, false);
+    public MapGenerator(int height, int width) {
+        _width = width;
+        _height = height;
+        _heightMap = new float[width, height];
+        _waterMap = new WaterCell[width, height];
+        _outTexture = new Texture2D(_width, _height, TextureFormat.RGBAFloat, false);
         _textureDrawer = new TextureDrawer();
 
         LoadHeightMapFromFile();
@@ -61,20 +54,17 @@ public class MapGenerator : MonoBehaviour {
             _textureDrawer.CreateAssetAndSave(_outTexture);
         }
 
-        if (UnityEngine.Windows.File.Exists("zoomLevel")) {
-            zoom = BitConverter.ToSingle(UnityEngine.Windows.File.ReadAllBytes("zoomLevel"),0);
-        }
     }
 
 
-    private void ReGenerate() {
+    public void ReGenerate() {
         GenerateHeightMap();
         GenerateRivers();
 
         for (var x = 0; x < 800; x++) {
             for (var y = 0; y < 800; y++) {
                 _outTexture.SetPixel(x, y,
-                    new Color(_heightMap[x, y], _waterMap[x, y].X, _waterMap[x, y].Y, _waterMap[x, y].Amount));
+                    new Color(_heightMap[x, y], _waterMap[x, y].X * 0.5f + 0.5f, _waterMap[x, y].Y * 0.5f + 0.5f, _waterMap[x, y].Amount));
             }
         }
 
@@ -96,7 +86,7 @@ public class MapGenerator : MonoBehaviour {
             var xx = mountainTop.Item1;
             var yy = mountainTop.Item2;
             var lastDir = new int2(0, 1);
-            while (xx < Width -1 && xx > 1 && yy > 1 && yy < Height -1) {
+            while (xx < _width -1 && xx > 1 && yy > 1 && yy < _height -1) {
                 var cellWithHeight = targetCells.Select(c => (c, _heightMap[xx + c.x,yy + c.y]));
                 var ordered = cellWithHeight.OrderBy(x => x.Item2).ToList();
                 var lowest = ordered.First();
@@ -129,8 +119,8 @@ public class MapGenerator : MonoBehaviour {
 
     private List<Tuple<int, int, float>> GetSpreadOutMointainTops() {
         var Queue = new List<Tuple<int, int, float>>(3);
-        for (int xx = 0; xx < Height; xx++) {
-            for (int yy = 0; yy < Width; yy++) {
+        for (int xx = 0; xx < _height; xx++) {
+            for (int yy = 0; yy < _width; yy++) {
                 var height = _heightMap[xx, yy];
                 if (Queue.Count < 3) {
                     Queue.Add(Tuple.Create(xx, yy, height));
@@ -170,32 +160,4 @@ public class MapGenerator : MonoBehaviour {
         }
     }
 
-    private void Update() {
-        _textureDrawer.Draw(_outTexture, Width, Height, zoom);
-
-        if (Input.mouseScrollDelta.magnitude > 0.1f) {
-            zoom = Mathf.Clamp(zoom + Input.mouseScrollDelta.y * zoom * 0.2f, 0.8f, 100.0f);
-        }
-    }
-
-    private float zoom = 85.0f;
-
-    private void OnGUI() {
-        const int height = 40;
-        if (GUI.Button(new Rect(10, 70 + height * 0, 100, height), "Regen")) {
-            ReGenerate();
-        }
-
-        if (GUI.Button(new Rect(10, 70 + height * 1, 100, height), "Save")) {
-            _textureDrawer.UpdateSave(_outTexture, zoom);
-        }
-
-        if (GUI.Button(new Rect(10, 110 + height * 2, 100, height), "Debug")) {
-            _textureDrawer.SetDebug();
-        }
-
-        if (GUI.Button(new Rect(10, 110 + height * 3, 100, height), "Standard")) {
-            _textureDrawer.SetStandard();
-        }
-    }
 }
