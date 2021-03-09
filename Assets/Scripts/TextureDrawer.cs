@@ -7,6 +7,7 @@ using Debug = System.Diagnostics.Debug;
 using Object = UnityEngine.Object;
 
 class TextureDrawer {
+    public static TextureDrawer Instance;
     private readonly Mesh _quadMesh;
     private readonly Material _pixelMaterial;
     private readonly Material _finishMaterial;
@@ -21,6 +22,7 @@ class TextureDrawer {
         _finishMaterial = Resources.Load<Material>("FinishMaterial");
         _pixelMaterial = Resources.Load<Material>("PixelMaterial");
         _drawMaterial = _finishMaterial;
+        Instance = this;
     }
 
     public void Draw(Texture texture, int width, int height, float zoom) {

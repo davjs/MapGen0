@@ -22,7 +22,7 @@ public class MapGenerator {
     private readonly int _width;
     private readonly int _height;
     private readonly float[,] _heightMap;
-    private readonly WaterCell[,] _waterMap;
+    private WaterCell[,] _waterMap;
     private readonly Texture2D _outTexture;
     private readonly TextureDrawer _textureDrawer;
 
@@ -80,7 +80,7 @@ public class MapGenerator {
             new int2(-1, 0),
             new int2(0, -1),
         };
-
+        _waterMap = new WaterCell[_width,_height];
 
         foreach (var mountainTop in mointainTops) {
             var xx = mountainTop.Item1;
@@ -150,11 +150,82 @@ public class MapGenerator {
         return Queue;
     }
 
+    float noise(float2 st) {
+        return Mathf.PerlinNoise(st.x, st.y);
+    }
+    
+    float fbm (float2 st) {
+        // Initial values
+        float value = 0.0f;
+        float amplitude = .5f;
+        float frequency = 0.0f;
+        //
+        // Loop of octaves
+        for (int i = 0; i < 6; i++) {
+            value += amplitude * noise(st);
+            st *= 2.0f;
+            amplitude *= .5f;
+        }
+        return value;
+    }
+
+
+    List<Tuple<int2,float>> GeneratePeaks() {
+        var peaks = new List<Tuple<int2,float>>();
+
+        for (var xx = _width /3 ; xx < _width * 2 / 3; xx+=10) {
+            peaks.Add(Tuple.Create(new int2(xx, _height / 2), fbm(new float2(xx * 0.02f,_height / 2.0f)) * 0.2f  + 0.8f));
+        }
+        
+        return peaks;
+    }
+    
+    List<Tuple<int2,float>> GenerateChains() {
+        var peaks = new List<Tuple<int2,float>>();
+
+        for (var xx = _width /3 ; xx < _width * 2 / 3; xx+=10) {
+            peaks.Add(Tuple.Create(new int2(xx, _height / 2), fbm(new float2(xx * 0.02f,_height / 2.0f)) * 0.2f  + 0.8f));
+        }
+        
+        return peaks;
+    }
+
     private void GenerateHeightMap() {
+        List<Tuple<int2,float>> mountains = GeneratePeaks();
+        var offset = Random.Range(0, 100000);
+        
+        int id = Random.Range(0,10000);
+        
+        for (var x = 0; x < 800; x++) {
+            for (var y = 0; y < 800; y++) {
+                var height = 0.0f;
+                
+                foreach (var mountain in mountains) {
+                    var pos = new int2(x, y);
+                    var vicinity = 1.0f - (math.distance(pos, mountain.Item1) * 2.0f) / _width;
+                    var dir = math.normalize(pos - mountain.Item1) + id + mountain.Item1.x;
+                    var distModifier = fbm(dir * 2.0f) * 0.1f - noise(dir* 2.0f) * 0.1f;
+
+                    height = math.max(height, (vicinity + distModifier) * mountain.Item2);
+                }
+
+                _heightMap[x, y] = height * 0.8f + Mathf.PerlinNoise(x * 0.02f + offset, y * 0.02f) * 0.025f;
+            }
+        }
+        
+    }
+
+    private void NoiseMap() {
         var offset = Random.Range(0, 100000);
         for (var x = 0; x < 800; x++) {
             for (var y = 0; y < 800; y++) {
                 var value = Mathf.PerlinNoise(x * 0.01f + offset, y * 0.01f);
+                // BLUR
+//                if (Mathf.Abs(value - 0.5f) < 0.2f) {
+//                    value = 0.5f + (value - 0.5f) * 0.5f;
+//                }
+                value = Mathf.PerlinNoise(x * 0.0001f - offset, y * 0.0001f + offset) * 0.9f + value * 0.1f;
+                //value = Mathf.PerlinNoise(x * 0.001f + offset, y * 0.001f);
                 _heightMap[x, y] = value;
             }
         }
