@@ -59,7 +59,9 @@ public class MapGenerator {
 
 
     public void ReGenerate() {
-        GenerateMountainChain();
+        //GenerateMountainChain();
+        //GenerateMountains();
+        GenerateHeightMapUsingStamp();
         GenerateRivers();
 
         for (var x = 0; x < 800; x++) {
@@ -190,6 +192,25 @@ public class MapGenerator {
         return value;
     }
     
+    public float MontainNoise(float2 xy) {
+        var n = Mathf.Abs(Mathf.PerlinNoise(xy.x,xy.y) - 0.5f);     // create creases
+        n = 1.0f - n * 2.0f; // invert so creases are at top
+        return n * n;
+    }
+    
+    public float MountainFbm(float2 xy) {
+        var gain = 0.5f;
+        var value = 0.0f;
+        var amplitude = 0.5f;
+        for (var i = 0; i < 10; i++) {
+             value += Mathf.Lerp(amplitude * Mathf.PerlinNoise(xy.x,xy.y) , amplitude * MontainNoise(xy), 1.0f);   
+            xy *= 2;
+            amplitude *= gain;
+            
+        }
+        return value;
+    }
+    
     List<Tuple<int2,float>> GenerateRandPeaks() {
         var peaks = new List<Tuple<int2,float>>();
 
@@ -220,7 +241,7 @@ public class MapGenerator {
     }
 
     private void GenerateHeightMapUsingStamp() {
-        const string path = "Assets/resources/mountain.png";
+        const string path = "Assets/resources/drawn.png";
         var fileData = File.ReadAllBytes(path);
         var img = new Texture2D(2,2);
         img.LoadImage(fileData);
@@ -271,18 +292,98 @@ public class MapGenerator {
     
     List<Tuple<int2,float>> GeneratePeakChain() {
         var peaks = new List<Tuple<int2,float>>();
+        var seed = Random.value;
 
         for (var xx = _width /3 ; xx < _width * 2 / 3; xx+=1) {
-            var offset = Mathf.RoundToInt(fbm(new float2(xx * 0.001f, _height)) * 400.0f);
-            peaks.Add(Tuple.Create(new int2(xx, _height / 2 + offset), fbm(new float2(xx * 0.01f,_height / 2.0f)) * 0.7f  + 0.3f));
+            var offset = Mathf.RoundToInt(fbm(new float2(xx * 0.001f, _height) + seed) * 400.0f);
+            peaks.Add(Tuple.Create(new int2(xx, _height / 3 + offset), fbm(new float2(xx * 0.01f,_height / 2.0f)) * 0.7f  + 0.3f));
+        }
+        
+//        for (int i = 0; i < 4; i++) {
+//            var xx = Random.Range(Mathf.RoundToInt(_width * 0.3f), Mathf.RoundToInt(_width * 0.7f));
+//            var yy = Random.Range(Mathf.RoundToInt(_height * 0.4f), Mathf.RoundToInt(_height * 0.6f));
+//            peaks.Add(Tuple.Create(new int2(xx, yy), fbm(new float2(xx * 0.02f,yy * 0.02f)) * 0.5f  + 0.5f));
+//        }
+        
+        return peaks;
+    }
+    
+    
+    List<Tuple<int2,float,float>> GenerateMountainCluster() {
+        var peaks = new List<Tuple<int2,float, float>>();
+        var seed = Random.Range(0, 10000);
+
+        for (int i = 0; i < 32; i++) {
+            var xx = Random.Range(Mathf.RoundToInt(_width * 0.3f), Mathf.RoundToInt(_width * 0.7f));
+            var yy = Random.Range(Mathf.RoundToInt(_height * 0.4f), Mathf.RoundToInt(_height * 0.6f));
+            peaks.Add(Tuple.Create(new int2(xx, yy), 
+                Mathf.Clamp01(fbm(new float2(xx * 0.01f,yy * 0.01f)) * 1.0f  + 0.1f),
+                fbm(new float2(xx * 0.01f,yy * 0.01f) + seed) * 12.0f  + 0.5f
+                ));
         }
         
         return peaks;
     }
 
+    private void MaskedFBM2() {
+        var seed = Random.value;
+        var id = Random.Range(0,10000);
+        var peaks = GenerateMountainCluster();
+        for (var x = 0; x < 800; x++) {
+            for (var y = 0; y < 800; y++) {
+                var pos = new float2(x, y);
+                var center = new float2(_width /2.0f, _height /2.0f);
+                var vicinity = 1.0f - (math.distance(pos,center) * 4.0f) / _width;
+                _heightMap[x, y] = MountainFbm(new float2(x, y) * 0.002f + id) * vicinity;
+//                _heightMap[x, y] = math.lerp(
+//                    math.lerp(
+//                        fbm(new float2(x,y) * 0.08f + seed),
+//                        MountainFbm(new float2(x,y) * 0.002f + seed), 
+//                        1.0f), 
+//                    vicinity, 
+//                    0.4f);
+            }
+        }
+    }
+
+    private void MaskedFBM() {
+        var seed = Random.value;
+        var id = Random.Range(0,10000);
+        var peaks = GenerateMountainCluster();
+        for (var x = 0; x < 800; x++) {
+            for (var y = 0; y < 800; y++) {
+                var pos = new float2(x, y);
+                var center = new float2(_width /2.0f, _height /2.0f);
+                var height = 0.0f;
+                foreach (var peak in peaks) {
+                    var vicinity = 1.0f - (math.distance(pos,peak.Item1 ) * 4.0f) / _width;
+                    var dir = math.normalize(pos - peak.Item1) + id + peak.Item1.x * 10.0f;
+                    var distModifier = fbm(dir * 2.0f) * 0.1f - noise(dir* 2.0f) * 0.01f;
+                    var peakHeight = Mathf.Clamp01(peak.Item2);
+
+                    if (vicinity >= 0.9f) {
+                        if (math.distance(pos, peak.Item1) < 0.01f) {
+                            vicinity = 0.0f;                            
+                        }
+                    }
+                    
+//                    height = Mathf.Max(vicinity * peakHeight + distModifier, height);
+                    height = Mathf.Clamp01(Mathf.Max(Mathf.Pow(vicinity * peakHeight + distModifier, 1.5f), height));
+                }
+                
+                _heightMap[x, y] = math.lerp(
+                    math.lerp(
+                        fbm(new float2(x,y) * 0.08f + seed),
+                        MountainFbm(new float2(x,y) * 0.005f + seed), 
+                        0.8f), 
+                    height, 
+                    0.8f);
+            }
+        }
+    }
     
-    private void GenerateMountainChain() {
-        var peaks = GeneratePeakChain();
+    private void GenerateMountains() {
+        var peaks = GenerateMountainCluster();
         var offset = Random.Range(0, 100000);
         
         var chainStart = new Vector2(_width/3.0f, _height/2.0f);
@@ -297,11 +398,23 @@ public class MapGenerator {
                     
                 //height = (vicinity + distModifier) * peakHeight;
                 foreach (var peak in peaks) {
-                    var vicinity = 1.0f - (math.distance(pos, peak.Item1) * 4.0f) / _width;
-                    var dir = math.normalize(pos - new Vector2(peak.Item1.x, peak.Item1.y)) + id + peak.Item1.x * 10.0f;
+                    var vicinity = 1.0f - (math.distance(pos, peak.Item1) * peak.Item3) / _width;
+                    float2 dir;
+                    if (math.distance(pos,peak.Item1) < 0.01f) {
+                        dir = 0.0f;
+                    }
+                    else {
+                        dir = math.normalize(pos - new Vector2(peak.Item1.x, peak.Item1.y)) + id + peak.Item1.x * 10.0f;                        
+                    }
                     var distModifier = fbm(dir * 2.0f) * 0.1f - noise(dir* 2.0f) * 0.01f;
                     var peakHeight = peak.Item2;
-//                    height = Mathf.Max(vicinity * peakHeight + distModifier, height);
+
+                    if (vicinity >= 0.9f) {
+                        if (math.distance(pos, peak.Item1) < 0.01f) {
+                            vicinity = 1.0f;                            
+                        }
+                    }
+
                     height = Mathf.Max(Mathf.Pow(vicinity * peakHeight + distModifier, 1.5f), height);
                 }
 
@@ -326,4 +439,9 @@ public class MapGenerator {
         }
     }
 
+    public void Draw(int2 position) {
+//        _heightMap[position.x, position.y] += 0.1f;
+//        _outTexture.SetPixel(position.x, position.y,new Color(_heightMap[position.x, position.y], _waterMap[position.x, position.y].X * 0.5f + 0.5f, _waterMap[position.x, position.y].Y * 0.5f + 0.5f, _waterMap[position.x, position.y].Amount));
+//        _outTexture.Apply();
+    }
 }
